@@ -1,3 +1,6 @@
 pandas
-mysql-connector-python
 numpy
+sqlalchemy
+pymysql
+mysql-connector-python
+unidecode
