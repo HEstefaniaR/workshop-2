@@ -8,6 +8,7 @@ sys.path.append("/opt/airflow")
 
 from scripts.extract import extract_spotify, extract_grammy
 from scripts.transform import transform_spotify, transform_grammy
+from scripts.merge import merge_dw
 
 OUTPUT_DIR = "/opt/airflow/processed_data"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -21,42 +22,41 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 )
 def etl_spotify_grammy():
 
-    # --- Spotify ---
     @task()
     def extract_spotify_task():
         df = extract_spotify()
-        output_path = "/opt/airflow/processed_data/spotify_raw.csv"
-        df.to_csv(output_path, index=False)
-        print(f"Spotify CSV guardado en {output_path}")
-        return output_path
+        return df  
 
     @task()
-    def transform_spotify_task(csv_path: str):
-        df = pd.read_csv(csv_path)
-        df_clean = transform_spotify(df)
-        output_path = "/opt/airflow/processed_data/spotify_clean.csv"
-        df_clean.to_csv(output_path, index=False)
-        print(f"Spotify limpio guardado en {output_path}")
+    def transform_spotify_task(df: pd.DataFrame):
+        dims_dict = transform_spotify(df)
+        return dims_dict 
 
-    # --- Grammy ---
     @task()
     def extract_grammy_task():
         df = extract_grammy()
-        return df.to_dict(orient="list")
+        return df  
 
     @task()
-    def transform_grammy_task(raw_df: dict):
-        df = pd.DataFrame(raw_df)
-        df_clean = transform_grammy(df)
-        output_path = os.path.join(OUTPUT_DIR, "grammy_clean.csv")
-        df_clean.to_csv(output_path, index=False)
-        print(f"[ETL] Grammy limpio guardado en {output_path}")
+    def transform_grammy_task(df: pd.DataFrame):
+        dims_dict = transform_grammy(df)
+        return dims_dict 
+
+    @task()
+    def merge_task(spotify_dims: dict, grammy_dims: dict):
+        dw = merge_dw(spotify_dims, grammy_dims)
+        for name, df_dw in dw.items():
+            output_path = os.path.join(OUTPUT_DIR, f"{name}.csv")
+            df_dw.to_csv(output_path, index=False)
+            print(f"Data Warehouse '{name}' guardado en {output_path}")
+        return list(dw.keys())
 
     raw_spotify = extract_spotify_task()
-    transform_spotify_task(raw_spotify)
+    spotify_dims = transform_spotify_task(raw_spotify)
 
     raw_grammy = extract_grammy_task()
-    transform_grammy_task(raw_grammy)
+    grammy_dims = transform_grammy_task(raw_grammy)
 
+    dw_tables = merge_task(spotify_dims, grammy_dims)
 
 etl_spotify_grammy()
