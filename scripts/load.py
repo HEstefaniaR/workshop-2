@@ -1,11 +1,13 @@
 import os
+import pandas as pd
+from sqlalchemy import create_engine
 from typing import List, Dict, Any
 
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
 
-def load(csv_paths: List[str], replace: bool = False) -> Dict[str, Dict[str, Any]]:
+def load_to_Drive(csv_paths: List[str], replace: bool = False) -> Dict[str, Dict[str, Any]]:
     drive = _get_drive()
     results: Dict[str, Dict[str, Any]] = {}
 
@@ -36,6 +38,27 @@ def load(csv_paths: List[str], replace: bool = False) -> Dict[str, Dict[str, Any
         except Exception as e:
             results[path] = {"status": "error", "message": str(e)}
             print(f"Error subiendo {path}: {e}")
+
+    return results
+
+def load_to_postgres(df_dict: Dict[str, pd.DataFrame],
+                     mysql_conn_str: str = "postgresql+psycopg2://airflow:airflow@postgres_db:5432/grammys_dw",
+                     if_exists: str = "replace") -> Dict[str, Dict[str, Any]]:
+    results: Dict[str, Dict[str, Any]] = {}
+    
+    try:
+        engine = create_engine(mysql_conn_str)
+    except Exception as e:
+        raise RuntimeError(f"No se pudo crear la conexión a Postgres: {e}")
+
+    for table_name, df in df_dict.items():
+        try:
+            df.to_sql(name=table_name, con=engine, index=False, if_exists=if_exists)
+            results[table_name] = {"status": "ok", "rows": df.shape[0]}
+            print(f"Tabla '{table_name}' cargada correctamente: {df.shape[0]} filas")
+        except Exception as e:
+            results[table_name] = {"status": "error", "message": str(e)}
+            print(f"Error cargando tabla '{table_name}': {e}")
 
     return results
 

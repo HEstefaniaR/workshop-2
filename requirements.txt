@@ -5,3 +5,4 @@ pymysql
 mysql-connector-python
 unidecode
 pydrive2
+psycopg2-binary
