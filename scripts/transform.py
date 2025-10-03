@@ -1,8 +1,6 @@
 import pandas as pd
 import unidecode
 import re
-from difflib import SequenceMatcher
-
 
 def transform_spotify(df: pd.DataFrame) -> dict:
     df = df[df['duration_ms'] > 0].copy()
@@ -33,7 +31,15 @@ def transform_spotify(df: pd.DataFrame) -> dict:
         'genre_list': lambda x: sorted(set([g for sub in x for g in sub]))
     })
     
-    return build_spotify_dimensions(df)
+    dims = build_spotify_dimensions(df)
+    return {
+        "track_dim": dims["track_dim"],
+        "artist_dim": dims["artist_dim"],
+        "artist_track_bridge": dims["track_artist_dim"],
+        "genre_dim": dims["genre_dim"],
+        "genre_track_bridge": dims["genre_song_dim"]
+    }
+
 
 def transform_grammy(df: pd.DataFrame) -> dict:
     df = df.drop(columns=['img', 'workers'], errors='ignore')
@@ -43,7 +49,15 @@ def transform_grammy(df: pd.DataFrame) -> dict:
     for col in ['published_at', 'updated_at']:
         df[col] = df[col].apply(normalize_date)
     df['artist'] = df['artist'].apply(normalize_text)
-    return build_grammy_dimensions(df)
+    
+    dims = build_grammy_dimensions(df)
+    
+    award_fact_df = dims["provisional_nominee_dim"].rename(columns={"nominee_id": "award_fact_id"})
+    
+    return {
+        "grammy_event_dim": dims["grammy_event_dim"],
+        "award_fact": award_fact_df
+    }
 
 
 # Limpieza
