@@ -21,7 +21,6 @@ def merge_dw(spotify_dims: dict[str, pd.DataFrame], grammy_dims: dict[str, pd.Da
         "genre_dim": genre_dim,
         "genre_song_dim": genre_song_dim,
         "grammy_event_dim": grammy_event_dim,
-        "provisional_nominee_dim": nominee_dim,
         "award_fact": award_fact
     }
     return dw

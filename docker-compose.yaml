@@ -60,6 +60,8 @@ x-airflow-common:
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
     _PIP_ADDITIONAL_REQUIREMENTS: -r /opt/airflow/requirements.txt
+    GOOGLE_DRIVE_CREDENTIALS_FILE: /opt/airflow/client_secret.json
+    GOOGLE_DRIVE_TOKEN_FILE: /opt/airflow/token.json
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
@@ -69,6 +71,8 @@ x-airflow-common:
     - ./processed_data:/opt/airflow/processed_data
     - ./scripts:/opt/airflow/scripts
     - ./requirements.txt:/opt/airflow/requirements.txt
+    - ../client_secret.json:/opt/airflow/client_secret.json
+    - ../token.json:/opt/airflow/token.json
   depends_on:
     &airflow-common-depends-on
     redis:
