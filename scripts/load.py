@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Dict, Any
 from pydrive2.auth import GoogleAuth
@@ -45,73 +45,55 @@ def create_database_if_not_exists_mysql(user: str, password: str, host: str, por
     conn_str_server = f"mysql+pymysql://{user}:{password}@{host}:{port}/"
     engine_server = create_engine(conn_str_server)
 
-    with engine_server.connect() as conn:
-        conn.execute(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
+    with engine_server.begin() as conn:
+        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
         print(f"Base de datos '{db_name}' verificada/creada.")
 
 def load_to_mysql(df_dict: Dict[str, pd.DataFrame],
-                  user: str = "root",
-                  password: str = "root",
-                  host: str = "localhost",
+                  user: str = "dw_user",
+                  password: str = "dw_pass",
+                  host: str = "mysql_data",
                   port: int = 3306,
-                  db_name: str = "mydb") -> Dict[str, Dict[str, Any]]:
-
+                  db_name: str = "data_warehouse") -> Dict[str, Dict[str, Any]]:
+    
     create_database_if_not_exists_mysql(user, password, host, port, db_name)
     results: Dict[str, Dict[str, Any]] = {}
     conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
     engine = create_engine(conn_str)
-    metadata = MetaData()
-
+    
     table_order = [
         "track_dim", "artist_dim", "genre_dim", "grammy_event_dim",
         "artist_dim_has_track_dim", "genre_dim_has_track_dim", "award_fact"
     ]
-
+    
     try:
-        with engine.connect() as conn:
-            conn.execute("SET FOREIGN_KEY_CHECKS = 0;")
+        with engine.begin() as conn:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
             for table_name in table_order[::-1]:
-                conn.execute(f"DROP TABLE IF EXISTS {table_name};")
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
                 print(f"Tabla '{table_name}' eliminada (si existía)")
-            conn.execute("SET FOREIGN_KEY_CHECKS = 1;")
-
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        
         for table_name in table_order:
             df = df_dict.get(table_name)
             if df is None:
+                print(f"⚠️ WARNING: No se encontró DataFrame para '{table_name}'")
                 continue
-
+            
+            df = df.copy()
             for col in df.select_dtypes(include="object").columns:
                 df[col] = df[col].astype(str).str.slice(0, 255)
-
             df = df.replace(['nan', '', pd.NA], None)
-
-            if table_name != "award_fact":
-                df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
-                results[table_name] = {"status": "ok", "rows": df.shape[0]}
-                print(f"Tabla '{table_name}' cargada correctamente: {df.shape[0]} filas")
-            else:
-                valid_track = df[df['track_dim_track_id'].notnull()]
-                null_track = df[df['track_dim_track_id'].isnull()]
-
-                valid_artist = valid_track[valid_track['artist_dim_artist_id'].notnull()]
-                null_artist = valid_track[valid_track['artist_dim_artist_id'].isnull()]
-
-                if not valid_artist.empty:
-                    valid_artist.to_sql(name=table_name, con=engine, if_exists='append', index=False)
-                if not null_artist.empty:
-                    null_artist.to_sql(name=table_name, con=engine, if_exists='append', index=False)
-                if not null_track.empty:
-                    null_track.to_sql(name=table_name, con=engine, if_exists='append', index=False)
-
-                total_rows = len(valid_artist) + len(null_artist) + len(null_track)
-                results[table_name] = {"status": "ok", "rows": total_rows}
-                print(f"Tabla '{table_name}' cargada correctamente: {total_rows} filas")
-
+            
+            df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+            results[table_name] = {"status": "ok", "rows": len(df)}
+            print(f"Tabla '{table_name}' cargada correctamente: {len(df)} filas")
+        
     except SQLAlchemyError as e:
         print(f"Error cargando tablas: {e}")
         for table_name in df_dict.keys():
             results.setdefault(table_name, {"status": "error", "message": str(e)})
-
+    
     return results
 
 
