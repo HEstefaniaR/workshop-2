@@ -13,7 +13,7 @@ def transform_spotify(df: pd.DataFrame) -> dict:
         'artist_list': 'first',
         'album_name': 'first',
         'track_name': 'first',
-        'popularity': 'first',
+        'popularity': 'first', 
         'duration_ms': 'first',
         'explicit': 'first',
         'danceability': 'first',
@@ -42,7 +42,7 @@ def transform_spotify(df: pd.DataFrame) -> dict:
 
 
 def transform_grammy(df: pd.DataFrame) -> dict:
-    df = df.drop(columns=['img', 'workers'], errors='ignore')
+    df = df.drop(columns=['img', 'workers', 'winner'], errors='ignore')
     df = df[df["nominee"].notna()].copy()
     for col in ['title', 'category', 'nominee']:
         df[col] = df[col].apply(normalize_text)
@@ -115,15 +115,16 @@ def normalize_genres(value):
 
 def build_track_dim(df: pd.DataFrame) -> pd.DataFrame:
     track_dim = df[[
-        'track_id', 'track_name', 'album_name', 'duration_ms',
+        'track_id', 'track_name', 'album_name', 'popularity', 'duration_ms',
         'explicit', 'danceability', 'energy', 'key',
         'loudness', 'mode', 'speechiness', 'instrumentalness',
         'liveness', 'valence', 'tempo', 'time_signature'
-    ]]
+    ]].copy()
+    
     track_dim = track_dim.drop_duplicates(subset=[
-        'track_name', 'album_name', 'duration_ms', 'explicit', 'danceability', 'energy',
-        'key', 'loudness', 'mode', 'speechiness', 'instrumentalness', 'liveness',
-        'valence', 'tempo', 'time_signature'
+        'track_name', 'album_name', 'popularity', 'duration_ms', 'explicit', 
+        'danceability', 'energy', 'key', 'loudness', 'mode', 'speechiness', 
+        'instrumentalness', 'liveness', 'valence', 'tempo', 'time_signature'
     ])
     track_dim = track_dim.reset_index(drop=True)
     return track_dim
@@ -166,9 +167,9 @@ def build_grammy_event_dim(df: pd.DataFrame) -> pd.DataFrame:
     return grammy_event_dim
 
 def build_provisional_nominee(df: pd.DataFrame, grammy_event_dim: pd.DataFrame) -> pd.DataFrame:
-    nominee_dim = df[['nominee', 'year', 'title', 'category', 'published_at', 'updated_at', 'winner']].dropna(subset=['nominee']).drop_duplicates().rename(columns={'nominee': 'name'})
+    nominee_dim = df[['nominee', 'year', 'title', 'category', 'published_at', 'updated_at']].dropna(subset=['nominee']).drop_duplicates().rename(columns={'nominee': 'name'})
     nominee_dim = nominee_dim.merge(grammy_event_dim, on=['year', 'title', 'category', 'published_at', 'updated_at'], how='left')
-    nominee_dim = nominee_dim[['name', 'winner', 'grammy_event_id']]
+    nominee_dim = nominee_dim[['name', 'grammy_event_id']]
     nominee_dim.insert(0, "nominee_id", range(1, len(nominee_dim) + 1))
     return nominee_dim
 

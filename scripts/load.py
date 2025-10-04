@@ -41,13 +41,6 @@ def load_to_Drive(csv_paths: List[str], replace: bool = False) -> Dict[str, Dict
 
     return results
 
-def create_database_if_not_exists_mysql(user: str, password: str, host: str, port: int, db_name: str):
-    conn_str_server = f"mysql+pymysql://{user}:{password}@{host}:{port}/"
-    engine_server = create_engine(conn_str_server)
-
-    with engine_server.begin() as conn:
-        conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
-        print(f"Base de datos '{db_name}' verificada/creada.")
 
 def load_to_mysql(df_dict: Dict[str, pd.DataFrame],
                   user: str = "dw_user",
@@ -56,28 +49,39 @@ def load_to_mysql(df_dict: Dict[str, pd.DataFrame],
                   port: int = 3306,
                   db_name: str = "data_warehouse") -> Dict[str, Dict[str, Any]]:
     
-    create_database_if_not_exists_mysql(user, password, host, port, db_name)
     results: Dict[str, Dict[str, Any]] = {}
-    conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
-    engine = create_engine(conn_str)
     
     table_order = [
-        "track_dim", "artist_dim", "genre_dim", "grammy_event_dim",
-        "artist_dim_has_track_dim", "genre_dim_has_track_dim", "award_fact"
+        "track_dim",
+        "artist_dim",
+        "genre_dim",
+        "grammy_event_dim",
+        "artist_track_bridge",   
+        "genre_track_bridge",    
+        "award_fact"
     ]
     
     try:
-        with engine.begin() as conn:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-            for table_name in table_order[::-1]:
-                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-                print(f"Tabla '{table_name}' eliminada (si existía)")
-            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+        print(f"Eliminando base de datos '{db_name}' si existe...")
+        conn_str_server = f"mysql+pymysql://{user}:{password}@{host}:{port}/"
+        engine_server = create_engine(conn_str_server)
         
+        with engine_server.begin() as conn:
+            conn.execute(text(f"DROP DATABASE IF EXISTS {db_name}"))
+            print(f"Base de datos '{db_name}' eliminada")
+            conn.execute(text(f"CREATE DATABASE {db_name} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"))
+            print(f"Base de datos '{db_name}' creada limpia")
+        
+        engine_server.dispose()
+        
+        conn_str = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
+        engine = create_engine(conn_str)
+        
+        print(f"\nCargando {len(table_order)} tablas...")
         for table_name in table_order:
             df = df_dict.get(table_name)
             if df is None:
-                print(f"⚠️ WARNING: No se encontró DataFrame para '{table_name}'")
+                print(f"WARNING: No se encontró DataFrame para '{table_name}'")
                 continue
             
             df = df.copy()
@@ -85,9 +89,17 @@ def load_to_mysql(df_dict: Dict[str, pd.DataFrame],
                 df[col] = df[col].astype(str).str.slice(0, 255)
             df = df.replace(['nan', '', pd.NA], None)
             
-            df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+            initial_rows = len(df)
+            df = df.drop_duplicates()
+            if initial_rows != len(df):
+                print(f"  ALERTA: Se eliminaron {initial_rows - len(df)} duplicados en '{table_name}'")
+            
+            df.to_sql(name=table_name, con=engine, if_exists='replace', index=False)
             results[table_name] = {"status": "ok", "rows": len(df)}
-            print(f"Tabla '{table_name}' cargada correctamente: {len(df)} filas")
+            print(f"  Tabla '{table_name}' cargada: {len(df)} filas")
+        
+        engine.dispose()
+        print(f"\nCarga completa exitosa!")
         
     except SQLAlchemyError as e:
         print(f"Error cargando tablas: {e}")
