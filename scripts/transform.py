@@ -113,6 +113,7 @@ def normalize_genres(value):
     parts = re.split(r'\s*(?:,|/|&|and|y)\s*', str(value).lower())
     return sorted(set([normalize_text(p) for p in parts if p.strip()]))
 
+# Dimensiones
 def build_track_dim(df: pd.DataFrame) -> pd.DataFrame:
     track_dim = df[[
         'track_id', 'track_name', 'album_name', 'popularity', 'duration_ms',
@@ -130,7 +131,6 @@ def build_track_dim(df: pd.DataFrame) -> pd.DataFrame:
     return track_dim
 
 
-# Dimensiones
 def build_artist_dims(df: pd.DataFrame):
     artist_expanded = df[['track_id', 'artist_list']].explode('artist_list').dropna().drop_duplicates()
     unique_artists = artist_expanded['artist_list'].unique()
@@ -167,10 +167,22 @@ def build_grammy_event_dim(df: pd.DataFrame) -> pd.DataFrame:
     return grammy_event_dim
 
 def build_provisional_nominee(df: pd.DataFrame, grammy_event_dim: pd.DataFrame) -> pd.DataFrame:
-    nominee_dim = df[['nominee', 'year', 'title', 'category', 'published_at', 'updated_at']].dropna(subset=['nominee']).drop_duplicates().rename(columns={'nominee': 'name'})
-    nominee_dim = nominee_dim.merge(grammy_event_dim, on=['year', 'title', 'category', 'published_at', 'updated_at'], how='left')
-    nominee_dim = nominee_dim[['name', 'grammy_event_id']]
+    nominee_dim = (
+        df[['nominee', 'year', 'title', 'category', 'published_at', 'updated_at']]
+        .dropna(subset=['nominee'])
+        .drop_duplicates()
+        .rename(columns={'nominee': 'name'})
+    )
+
+    nominee_dim = nominee_dim.merge(
+        grammy_event_dim,
+        on=['year', 'title', 'category', 'published_at', 'updated_at'],
+        how='left'
+    )
+
+    nominee_dim = nominee_dim[['name', 'category', 'grammy_event_id']]
     nominee_dim.insert(0, "nominee_id", range(1, len(nominee_dim) + 1))
+
     return nominee_dim
 
 def build_grammy_dimensions(df: pd.DataFrame):
