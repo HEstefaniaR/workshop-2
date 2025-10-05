@@ -6,82 +6,67 @@ def merge_dw(spotify_dims: dict[str, pd.DataFrame], grammy_dims: dict[str, pd.Da
     artist_track_bridge = spotify_dims["artist_track_bridge"]
     genre_dim = spotify_dims["genre_dim"]
     genre_track_bridge = spotify_dims["genre_track_bridge"]
-
     grammy_event_dim = grammy_dims["grammy_event_dim"]
-    award_fact_df = grammy_dims["award_fact"].copy()
-
-    # Asegurar award_fact_id
-    if 'award_fact_id' not in award_fact_df.columns:
-        award_fact_df.insert(0, 'award_fact_id', range(1, len(award_fact_df) + 1))
-
-    # Normalizar columnas
+    award_fact_df = grammy_dims["award_fact"]
+    
     award_fact_df['name'] = award_fact_df['name'].replace(['nan', ''], pd.NA)
-    if 'category' not in award_fact_df.columns:
-        award_fact_df['category'] = 'unknown'
-    award_fact_df['category'] = award_fact_df['category'].apply(classify_category)
-
-    # Construir candidatos
-    artist_matches = (
-        award_fact_df[award_fact_df['category'].isin(['artist', 'unknown'])]
-        .merge(artist_dim, left_on='name', right_on='name', how='inner')
-        .drop_duplicates(subset=['award_fact_id', 'artist_id'])
-    )
-    artist_matches["match_type"] = "artist"
-
-    track_matches = (
-        award_fact_df[award_fact_df['category'].isin(['track', 'unknown'])]
-        .merge(track_dim, left_on='name', right_on='track_name', how='inner')
-        .drop_duplicates(subset=['award_fact_id', 'track_id'])
-    )
-    track_matches["match_type"] = "track"
-
-    # Resolver conflictos award_fact_id presentes en ambos
-    both = set(artist_matches['award_fact_id']) & set(track_matches['award_fact_id'])
-    for aid in both:
-        cat_type = award_fact_df.loc[award_fact_df['award_fact_id'] == aid, 'category'].iloc[0]
-        if cat_type == 'artist':
-            track_matches = track_matches[track_matches['award_fact_id'] != aid]
-        elif cat_type == 'track':
-            artist_matches = artist_matches[artist_matches['award_fact_id'] != aid]
-
-    # Construir award_fact
-    artist_awards = artist_matches.rename(columns={'artist_id': 'winner_artist_id'})
-    artist_awards['winner_track_id'] = None
-    artist_awards = artist_awards.merge(
-        grammy_event_dim[['grammy_event_id', 'award_fact_id']],
-        on='award_fact_id',
-        how='left'
-    )
-    artist_awards = artist_awards[['winner_artist_id', 'winner_track_id', 'grammy_event_id']]
-
-    track_awards = track_matches.rename(columns={'track_id': 'winner_track_id'})
-    track_awards['winner_artist_id'] = None
-    track_awards = track_awards.merge(
-        grammy_event_dim[['grammy_event_id', 'award_fact_id']],
-        on='award_fact_id',
-        how='left'
-    )
-    track_awards = track_awards[['winner_artist_id', 'winner_track_id', 'grammy_event_id']]
-
-    award_fact = pd.concat([artist_awards, track_awards], ignore_index=True)
-
-    # Validaciones
-    valid_event_ids = set(grammy_event_dim['grammy_event_id'])
-    award_fact = award_fact[award_fact['grammy_event_id'].isin(valid_event_ids)]
-    award_fact = award_fact.drop_duplicates(subset=['winner_artist_id', 'winner_track_id', 'grammy_event_id'])
-
-    # Asignar ID final
-    award_fact.insert(0, 'award_fact_id', range(1, len(award_fact) + 1))
-    award_fact['winner_artist_id'] = award_fact['winner_artist_id'].astype('Int64')
-    award_fact['winner_track_id'] = award_fact['winner_track_id'].astype('string')
-
-    print("=== Award Fact Integridad ===")
-    print(f"Premios totales: {len(award_fact)}")
-    print(f"Premios solo artista: {award_fact['winner_artist_id'].notna().sum()}")
-    print(f"Premios solo track: {award_fact['winner_track_id'].notna().sum()}")
-    print("=============================")
-
-    return {
+    
+    award_fact_df['category_type'] = award_fact_df['category'].apply(classify_category)
+    
+    artist_matches, track_matches = build_award_candidates(award_fact_df, artist_dim, track_dim)
+    award_fact = build_award_fact(artist_matches, track_matches, grammy_event_dim)
+    
+    used_event_ids = set(award_fact['grammy_event_id'].unique())
+    initial_events = len(grammy_event_dim)
+    grammy_event_dim = grammy_event_dim[grammy_event_dim['grammy_event_id'].isin(used_event_ids)]
+    removed_events = initial_events - len(grammy_event_dim)
+    print(f"Grammy events: {removed_events} eliminados, {len(grammy_event_dim)} mantenidos")
+    
+    used_artist_ids = set(award_fact[award_fact['winner_artist_id'].notna()]['winner_artist_id'].unique())
+    initial_artists = len(artist_dim)
+    artist_dim = artist_dim[artist_dim['artist_id'].isin(used_artist_ids)]
+    removed_artists = initial_artists - len(artist_dim)
+    print(f"Artistas: {removed_artists} eliminados, {len(artist_dim)} mantenidos")
+    
+    used_track_ids = set(award_fact[award_fact['winner_track_id'].notna()]['winner_track_id'].unique())
+    initial_tracks = len(track_dim)
+    track_dim = track_dim[track_dim['track_id'].isin(used_track_ids)]
+    removed_tracks = initial_tracks - len(track_dim)
+    print(f"Tracks: {removed_tracks} eliminados, {len(track_dim)} mantenidos")
+    
+    initial_at_bridge = len(artist_track_bridge)
+    artist_track_bridge = artist_track_bridge[
+        artist_track_bridge['artist_id'].isin(used_artist_ids) &
+        artist_track_bridge['track_id'].isin(used_track_ids)
+    ]
+    removed_at_bridge = initial_at_bridge - len(artist_track_bridge)
+    print(f"Artist-Track bridge: {removed_at_bridge} eliminados, {len(artist_track_bridge)} mantenidos")
+    
+    initial_gt_bridge = len(genre_track_bridge)
+    genre_track_bridge = genre_track_bridge[genre_track_bridge['track_id'].isin(used_track_ids)]
+    removed_gt_bridge = initial_gt_bridge - len(genre_track_bridge)
+    print(f"Genre-Track bridge: {removed_gt_bridge} eliminados, {len(genre_track_bridge)} mantenidos")
+    
+    used_genre_ids = set(genre_track_bridge['genre_id'].unique())
+    initial_genres = len(genre_dim)
+    genre_dim = genre_dim[genre_dim['genre_id'].isin(used_genre_ids)]
+    removed_genres = initial_genres - len(genre_dim)
+    print(f"Géneros: {removed_genres} eliminados, {len(genre_dim)} mantenidos")
+    
+    print("\n=== REPORTE DE INTEGRIDAD REFERENCIAL ===")
+    print(f"Grammy events: {len(grammy_event_dim)}")
+    print(f"Artistas ganadores: {len(artist_dim)}")
+    print(f"Tracks ganadores: {len(track_dim)}")
+    print(f"Géneros: {len(genre_dim)}")
+    print(f"Artist-Track bridges: {len(artist_track_bridge)}")
+    print(f"Genre-Track bridges: {len(genre_track_bridge)}")
+    print(f"\nPremios totales: {len(award_fact)}")
+    print(f"  - Solo artista: {len(award_fact[award_fact['winner_artist_id'].notna() & award_fact['winner_track_id'].isna()])}")
+    print(f"  - Solo track: {len(award_fact[award_fact['winner_track_id'].notna() & award_fact['winner_artist_id'].isna()])}")
+    print(f"  - Ambos: {len(award_fact[award_fact['winner_artist_id'].notna() & award_fact['winner_track_id'].notna()])}")
+    print("==========================================\n")
+    
+    dw = {
         "track_dim": track_dim,
         "artist_dim": artist_dim,
         "artist_track_bridge": artist_track_bridge,
@@ -90,69 +75,66 @@ def merge_dw(spotify_dims: dict[str, pd.DataFrame], grammy_dims: dict[str, pd.Da
         "grammy_event_dim": grammy_event_dim,
         "award_fact": award_fact
     }
+    return dw
+
 
 def classify_category(cat: str) -> str:
     if pd.isna(cat):
-        return 'track'
+        return 'artist' 
     cat = str(cat).lower()
-    if any(w in cat for w in ['song', 'record', 'track']):
+    if any(w in cat for w in ['song', 'record', 'track', 'single']):
         return 'track'
-    if any(w in cat for w in ['artist', 'album', 'group', 'duo']):
+    if any(w in cat for w in ['artist', 'album', 'group', 'duo', 'band', 'performer', 'vocalist']):
         return 'artist'
-    return 'track'
+    return 'artist'
+
+KNOWN_TRACKS = {
+    'speechless',
+    'friends', 
+    'unleashed',
+    'gravity',
+    'home',
+    'heaven',
+    'matrix',
+    'the score',
+    'the gathering',
+    'plan b',
+    'crying',
+    'passion',
+    'love',
+    'eve',
+    'tommy',
+    'gece'
+}
+
 
 def build_award_candidates(award_fact_df: pd.DataFrame, artist_dim: pd.DataFrame, track_dim: pd.DataFrame):
-    def classify_category(category: str) -> str:
-        if pd.isna(category):
-            return "unknown"
-        cat = str(category).lower()
-        if any(word in cat for word in ["song", "record", "track"]):
-            return "track"
-        if any(word in cat for word in ["artist", "album", "group", "duo"]):
-            return "artist"
-        return "unknown"
-    
-    award_fact_df["category"] = award_fact_df["category"].apply(classify_category)
+    artist_candidates = award_fact_df[award_fact_df['category_type'] == 'artist'].copy()
+    artist_candidates = artist_candidates[~artist_candidates['name'].str.lower().isin(KNOWN_TRACKS)]
     
     artist_matches = (
-        award_fact_df[award_fact_df["category"].isin(["artist", "unknown"])]
-        .merge(
-            artist_dim,
-            left_on="name",
-            right_on="name",
-            how="left",
-            indicator=True
-        )
-        .query("_merge == 'both'")
-        .drop_duplicates(subset=["award_fact_id", "artist_id"])
+        artist_candidates
+        .merge(artist_dim, left_on='name', right_on='name', how='inner')
+        .drop_duplicates(subset=['award_fact_id', 'artist_id'])
     )
-    artist_matches["match_type"] = "artist"
-
+    artist_matches['match_type'] = 'artist'
+    
+    track_candidates = award_fact_df[
+        (award_fact_df['category_type'] == 'track') | 
+        (award_fact_df['name'].str.lower().isin(KNOWN_TRACKS))
+    ].copy()
+    
     track_matches = (
-        award_fact_df[award_fact_df["category"].isin(["track", "unknown"])]
-        .merge(
-            track_dim,
-            left_on="name",
-            right_on="track_name",
-            how="left",
-            indicator=True
-        )
-        .query("_merge == 'both'")
-        .drop_duplicates(subset=["award_fact_id", "track_id"])
+        track_candidates
+        .merge(track_dim, left_on='name', right_on='track_name', how='inner')
+        .drop_duplicates(subset=['award_fact_id', 'track_id'])
     )
-    track_matches["match_type"] = "track"
+    track_matches['match_type'] = 'track'
     
-    both = set(artist_matches["award_fact_id"]) & set(track_matches["award_fact_id"])
-    for award_id in both:
-        cat_type = award_fact_df.loc[award_fact_df["award_fact_id"] == award_id, "category"].iloc[0]
-        if cat_type == "artist":
-            track_matches = track_matches[track_matches["award_fact_id"] != award_id]
-        elif cat_type == "track":
-            artist_matches = artist_matches[artist_matches["award_fact_id"] != award_id]
-    
-    print("Coincidencias encontradas:")
-    print(f"Artistas: {len(artist_matches)}")
-    print(f"Tracks: {len(track_matches)}")
+    print(f"Coincidencias encontradas:")
+    print(f"  Artistas: {len(artist_matches)}")
+    print(f"  Tracks: {len(track_matches)}")
+    print(f"  Tracks conocidos bloqueados: {len(KNOWN_TRACKS)}")
     
     return artist_matches, track_matches
 

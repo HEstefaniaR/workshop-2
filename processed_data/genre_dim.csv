@@ -26,9 +26,7 @@ genre_id,name
 25,french
 26,world-music
 27,hard-rock
-28,forro
 29,pagode
-30,sertanejo
 31,j-pop
 32,j-rock
 33,jazz
@@ -37,7 +35,6 @@ genre_id,name
 36,children
 37,power-pop
 38,blues
-39,romance
 40,stud
 41,funk
 42,metal
@@ -46,8 +43,6 @@ genre_id,name
 45,grunge
 46,opera
 47,show-tunes
-48,-metal
-49,heav
 50,k-pop
 51,progressive-house
 52,acoustic
@@ -70,14 +65,10 @@ genre_id,name
 69,m
 70,opop
 71,swedish
-72,tango
 73,latin
 74,latino
-75,reggae
-76,reggaeton
 77,piano
 78,spanish
-79,salsa
 80,samba
 81,electronic
 82,goth
@@ -112,7 +103,6 @@ genre_id,name
 111,trip-hop
 112,part
 113,breakbeat
-114,sleep
 115,garage
 116,techno
 117,classical
