@@ -22,41 +22,20 @@ def merge_dw(spotify_dims: dict[str, pd.DataFrame], grammy_dims: dict[str, pd.Da
     removed_events = initial_events - len(grammy_event_dim)
     print(f"Grammy events: {removed_events} eliminados, {len(grammy_event_dim)} mantenidos")
     
-    used_artist_ids = set(award_fact[award_fact['winner_artist_id'].notna()]['winner_artist_id'].unique())
-    initial_artists = len(artist_dim)
-    artist_dim = artist_dim[artist_dim['artist_id'].isin(used_artist_ids)]
-    removed_artists = initial_artists - len(artist_dim)
-    print(f"Artistas: {removed_artists} eliminados, {len(artist_dim)} mantenidos")
+    print(f"\nManteniendo todos los datos de Spotify:")
+    print(f"  Artistas: {len(artist_dim)} (sin cambios)")
+    print(f"  Tracks: {len(track_dim)} (sin cambios)")
+    print(f"  Géneros: {len(genre_dim)} (sin cambios)")
+    print(f"  Artist-Track bridges: {len(artist_track_bridge)} (sin cambios)")
+    print(f"  Genre-Track bridges: {len(genre_track_bridge)} (sin cambios)")
     
-    used_track_ids = set(award_fact[award_fact['winner_track_id'].notna()]['winner_track_id'].unique())
-    initial_tracks = len(track_dim)
-    track_dim = track_dim[track_dim['track_id'].isin(used_track_ids)]
-    removed_tracks = initial_tracks - len(track_dim)
-    print(f"Tracks: {removed_tracks} eliminados, {len(track_dim)} mantenidos")
-    
-    initial_at_bridge = len(artist_track_bridge)
-    artist_track_bridge = artist_track_bridge[
-        artist_track_bridge['artist_id'].isin(used_artist_ids) &
-        artist_track_bridge['track_id'].isin(used_track_ids)
-    ]
-    removed_at_bridge = initial_at_bridge - len(artist_track_bridge)
-    print(f"Artist-Track bridge: {removed_at_bridge} eliminados, {len(artist_track_bridge)} mantenidos")
-    
-    initial_gt_bridge = len(genre_track_bridge)
-    genre_track_bridge = genre_track_bridge[genre_track_bridge['track_id'].isin(used_track_ids)]
-    removed_gt_bridge = initial_gt_bridge - len(genre_track_bridge)
-    print(f"Genre-Track bridge: {removed_gt_bridge} eliminados, {len(genre_track_bridge)} mantenidos")
-    
-    used_genre_ids = set(genre_track_bridge['genre_id'].unique())
-    initial_genres = len(genre_dim)
-    genre_dim = genre_dim[genre_dim['genre_id'].isin(used_genre_ids)]
-    removed_genres = initial_genres - len(genre_dim)
-    print(f"Géneros: {removed_genres} eliminados, {len(genre_dim)} mantenidos")
+    winner_artist_ids = set(award_fact[award_fact['winner_artist_id'].notna()]['winner_artist_id'].unique())
+    winner_track_ids = set(award_fact[award_fact['winner_track_id'].notna()]['winner_track_id'].unique())
     
     print("\n=== REPORTE DE INTEGRIDAD REFERENCIAL ===")
     print(f"Grammy events: {len(grammy_event_dim)}")
-    print(f"Artistas ganadores: {len(artist_dim)}")
-    print(f"Tracks ganadores: {len(track_dim)}")
+    print(f"Artistas totales: {len(artist_dim)} (ganadores: {len(winner_artist_ids)})")
+    print(f"Tracks totales: {len(track_dim)} (ganadores: {len(winner_track_ids)})")
     print(f"Géneros: {len(genre_dim)}")
     print(f"Artist-Track bridges: {len(artist_track_bridge)}")
     print(f"Genre-Track bridges: {len(genre_track_bridge)}")
