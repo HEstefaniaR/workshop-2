@@ -2,7 +2,7 @@
 
 # ETL Pipeline
 
-![](adjuntos/ETL%20Pipeline%20Diagram.png)
+![](https://github.com/HEstefaniaR/workshop-2/blob/9e4f2a499ae081c45ed8c7dd168cd7d0a68ab286/diagrams/ETL%20Pipeline%20Diagram.png)
 The goal of this project is to build an ETL pipeline that extracts data from a CSV file and a database, transforms both datasets, merges them into a dimensional model, loads it into a Data Warehouse and stores it in Google Drive, and finally, using the Data Warehouse, creates a dashboard.
 
 ## Pipeline Steps
@@ -21,6 +21,8 @@ The goal of this project is to build an ETL pipeline that extracts data from a C
 
 # Star Schema
 
+![](https://github.com/HEstefaniaR/workshop-2/blob/9e4f2a499ae081c45ed8c7dd168cd7d0a68ab286/diagrams/Star%20Schema.png)
+
 The Star Schema design is as follows:
 
 - **Fact Table:** `award_fact` (contains `track_id` if the track won, `artist_id` if the artist won, and `grammy_event_id`)
@@ -34,7 +36,7 @@ The Star Schema design is as follows:
 This design allows efficient joins between the fact table and dimensions, enabling comprehensive analysis from multiple perspectives. The model combines Spotify musical information with historical Grammy results.
 
 # Airflow DAG Design
-
+![](https://github.com/HEstefaniaR/workshop-2/blob/9e4f2a499ae081c45ed8c7dd168cd7d0a68ab286/diagrams/Airflow_graph.png)
 
 # Project Structure
 
@@ -183,12 +185,16 @@ docker-compose up -d
    http://localhost:8080
 8. **When all tasks finish, open Metabase:**
    http://localhost:3000/dashboard/2?year=
+   
    Credentials:
 
    - email: example@gmail.com
    - password: root1234
+   
      You can interact with the dashboard and change the year filter.
 
    You can also check the MySQL server connection in the container:
 
    http://localhost:3000/admin/databases/
+
+You can check the dashboard done [here](https://github.com/HEstefaniaR/workshop-2/blob/9e4f2a499ae081c45ed8c7dd168cd7d0a68ab286/visualizations/Metabase%20-%20Dashboard%20grammy%20awards%20for%20artist%20and%20tracks.pdf). 
